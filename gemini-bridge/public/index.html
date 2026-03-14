@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemini Remote Bridge</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #000000;
+            --surface: #0a0a0a;
+            --border: #1f1f1f;
+            --text: #ededed;
+            --text-muted: #888888;
+            --accent: #ffffff;
+            --accent-muted: #333333;
+            --green: #22c55e;
+            --red: #ef4444;
+            --amber: #f59e0b;
+            --radius: 6px;
+        }
+
+        * { box-sizing: border-box; }
+        body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); margin: 0; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+        
+        .layout { display: grid; grid-template-columns: 320px 1fr; height: 100vh; overflow: hidden; }
+        
+        aside { background: var(--surface); border-right: 1px solid var(--border); padding: 24px; display: flex; flex-direction: column; gap: 32px; overflow-y: auto; }
+        main { padding: 40px; overflow-y: auto; display: flex; flex-direction: column; gap: 32px; max-width: 900px; margin: 0 auto; width: 100%; }
+
+        .logo { font-size: 14px; font-weight: 700; letter-spacing: -0.5px; display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+        .logo svg { width: 18px; height: 18px; }
+
+        .section-label { font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.05em; margin-bottom: 12px; }
+        
+        .session-card { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; cursor: pointer; transition: 0.2s; position: relative; }
+        .session-card:hover { border-color: var(--accent); }
+        .session-card.active { border-color: var(--accent); background: #111; }
+        .session-card .name { font-size: 13px; font-weight: 600; display: block; margin-bottom: 4px; }
+        .session-card .host { font-size: 11px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; }
+        .btn-del { position: absolute; top: 8px; right: 8px; opacity: 0; background: none; border: none; color: var(--red); cursor: pointer; padding: 4px; }
+        .session-card:hover .btn-del { opacity: 1; }
+
+        .field { display: flex; flex-direction: column; gap: 8px; }
+        .field label { font-size: 12px; font-weight: 500; color: var(--text-muted); }
+        input { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); padding: 10px 12px; font-size: 13px; outline: none; transition: 0.2s; font-family: 'JetBrains Mono', monospace; }
+        input:focus { border-color: var(--accent); }
+
+        button { padding: 10px 16px; border-radius: var(--radius); font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid var(--border); transition: 0.2s; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+        button.primary { background: var(--accent); color: var(--bg); border: none; }
+        button.primary:hover { opacity: 0.9; }
+        button.secondary { background: var(--bg); color: var(--text); }
+        button.secondary:hover { background: var(--surface); border-color: var(--accent-muted); }
+
+        .explorer-container { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+        .explorer-nav { padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--text-muted); display: flex; align-items: center; gap: 8px; }
+        .explorer-list { height: 180px; overflow-y: auto; padding: 8px; }
+        .explorer-item { padding: 6px 12px; font-size: 12px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+        .explorer-item:hover { background: var(--bg); }
+        .explorer-item.selected { background: #111; color: var(--green); font-weight: 600; }
+
+        .terminal { background: #050505; border: 1px solid var(--border); border-radius: var(--radius); font-family: 'JetBrains Mono', monospace; font-size: 11px; height: 280px; overflow: hidden; display: flex; flex-direction: column; }
+        .term-header { padding: 8px 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+        .term-body { padding: 16px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 6px; }
+        .log-line { border-left: 2px solid var(--accent-muted); padding-left: 12px; margin-bottom: 4px; }
+        .log-type { font-weight: 700; font-size: 9px; margin-bottom: 2px; }
+        .log-content { white-space: pre-wrap; word-break: break-all; color: var(--text); }
+        
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #333; }
+        .status-dot.active { background: var(--green); box-shadow: 0 0 8px var(--green); }
+
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-thumb { background: var(--accent-muted); border-radius: 10px; }
+    </style>
+</head>
+<body>
+    <div id="loading" style="display:none; position:fixed; inset:0; background: rgba(0,0,0,0.8); z-index:100; align-items:center; justify-content:center; flex-direction:column; gap:16px;">
+        <div style="width:24px; height:24px; border:2px solid #333; border-top-color:#fff; border-radius:50%; animation:spin 0.8s linear infinite;"></div>
+        <div id="loading-txt" style="font-size:12px; font-family:monospace;">Sincronizando...</div>
+    </div>
+
+    <div class="layout">
+        <aside>
+            <div class="logo">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 7l5 5-5 5M13 7l5 5-5 5"/></svg>
+                REMOTE BRIDGE
+            </div>
+
+            <section>
+                <div class="section-label">Configuraciones</div>
+                <div id="session-list" style="display:flex; flex-direction:column; gap:12px;"></div>
+                <button onclick="newSession()" class="secondary" style="width:100%; margin-top:16px; font-size:11px;">+ Nueva Conexión</button>
+            </section>
+
+            <section style="margin-top: auto;">
+                <div class="section-label">Estado Global</div>
+                <div style="display:flex; align-items:center; gap:12px; background:var(--bg); border:1px solid var(--border); padding:12px; border-radius:var(--radius);">
+                    <div id="status-dot" class="status-dot"></div>
+                    <span id="status-text" style="font-size:12px; font-weight:500;">Bridge Inactivo</span>
+                </div>
+            </section>
+        </aside>
+
+        <main>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:32px;">
+                <div style="display:flex; flex-direction:column; gap:24px;">
+                    <div class="section-label">Servidor Remoto</div>
+                    <div class="field">
+                        <label>Nombre Sesión</label>
+                        <input id="session_name" placeholder="Ej: Production-Vercel">
+                    </div>
+                    <div class="field">
+                        <label>Host / IP</label>
+                        <input id="host" placeholder="192.168.1.50">
+                    </div>
+                    <div class="field">
+                        <label>Usuario</label>
+                        <input id="user" placeholder="root">
+                    </div>
+                    <div class="field">
+                        <label>Contraseña</label>
+                        <input type="password" id="pass" placeholder="••••••••">
+                    </div>
+                    <button onclick="testSSH()" class="secondary" id="btn-test">Test Conexión</button>
+                </div>
+
+                <div style="display:flex; flex-direction:column; gap:24px;">
+                    <div class="section-label">Mapeo de Rutas</div>
+                    
+                    <div class="field">
+                        <label>Directorio Local (Mac)</label>
+                        <div class="explorer-container">
+                            <div class="explorer-nav" id="local-nav">/Users/dev</div>
+                            <div id="local-list" class="explorer-list"></div>
+                        </div>
+                        <div id="local-sel" class="host" style="font-size:10px; margin-top:4px;">No seleccionado</div>
+                    </div>
+
+                    <div class="field">
+                        <label>Directorio Remoto (Linux)</label>
+                        <div class="explorer-container">
+                            <div class="explorer-nav" id="remote-nav">/</div>
+                            <div id="remote-list" class="explorer-list"></div>
+                        </div>
+                        <div id="remote-sel" class="host" style="font-size:10px; margin-top:4px;">No seleccionado</div>
+                    </div>
+                </div>
+            </div>
+
+            <div style="border-top: 1px solid var(--border); padding-top: 32px;">
+                <button onclick="activateBridge()" class="primary" style="width:100%; height:48px;">ACTIVAR SINCRONIZACIÓN</button>
+            </div>
+
+            <div class="terminal">
+                <div class="term-header">
+                    <span class="section-label" style="margin:0;">Intercepción de Comandos</span>
+                    <button onclick="clearLogs()" style="padding:2px 8px; font-size:9px; background:none; border-color:var(--accent-muted);">Limpiar</button>
+                </div>
+                <div id="term-body" class="term-body"></div>
+            </div>
+        </main>
+    </div>
+
+    <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
+
+    <script>
+        let sessions = {};
+        let selLocal = '';
+        let selRemote = '';
+
+        async function init() {
+            await loadConfigs();
+            setupSSE();
+            setInterval(checkStatus, 5000);
+            checkStatus();
+            browseLocal('');
+        }
+
+        function setupSSE() {
+            const ev = new EventSource('/api/log-stream');
+            ev.onmessage = (e) => {
+                const data = JSON.parse(e.data);
+                const body = document.getElementById('term-body');
+                const line = document.createElement('div');
+                line.className = 'log-line';
+                
+                let color = 'var(--text-muted)';
+                let type = 'INFO';
+                if(data.type === 'command') { color = 'var(--accent)'; type = 'EXEC'; }
+                if(data.type === 'result') { color = data.exit_code === 0 ? 'var(--green)' : 'var(--red)'; type = 'OUT'; }
+                if(data.type === 'error') { color = 'var(--red)'; type = 'ERR'; }
+
+                line.innerHTML = `
+                    <div class="log-type" style="color:${color}">${type}</div>
+                    <div class="log-content">${(data.output || data.cmd || data.message || '').replace(/</g, '&lt;')}</div>
+                `;
+                body.appendChild(line);
+                body.scrollTop = body.scrollHeight;
+            };
+        }
+
+        async function loadConfigs() {
+            const r = await fetch('/api/get-configs');
+            sessions = await r.json();
+            const list = document.getElementById('session-list');
+            list.innerHTML = '';
+            Object.keys(sessions).forEach(name => {
+                const s = sessions[name];
+                const div = document.createElement('div');
+                div.className = 'session-card';
+                div.innerHTML = `<span class="name">${name}</span><span class="host">${s.user}@${s.host}</span><button class="btn-del" onclick="deleteSession(event, '${name}')">✕</button>`;
+                div.onclick = () => loadSession(name);
+                list.appendChild(div);
+            });
+        }
+
+        function loadSession(name) {
+            const s = sessions[name];
+            document.getElementById('session_name').value = name;
+            document.getElementById('host').value = s.host;
+            document.getElementById('user').value = s.user;
+            document.getElementById('pass').value = s.password || '';
+            selLocal = s.local_path;
+            selRemote = s.remote_path;
+            document.getElementById('local-sel').innerText = selLocal;
+            document.getElementById('remote-sel').innerText = selRemote;
+            browseLocal(selLocal);
+        }
+
+        async function browseLocal(path) {
+            const r = await fetch('/api/ls-local', { method: 'POST', body: JSON.stringify({ path }) });
+            const data = await r.json();
+            document.getElementById('local-nav').innerText = data.current;
+            renderExp('local-list', data, browseLocal, (p) => { selLocal = p; document.getElementById('local-sel').innerText = p; });
+        }
+
+        async function browseRemote(path = '/') {
+            const config = { host: document.getElementById('host').value, user: document.getElementById('user').value, password: document.getElementById('pass').value, remote_path: path };
+            const r = await fetch('/api/ls-remote', { method: 'POST', body: JSON.stringify(config) });
+            const data = await r.json();
+            if(data.error) return alert(data.error);
+            document.getElementById('remote-nav').innerText = data.current;
+            renderExp('remote-list', data, browseRemote, (p) => { selRemote = p; document.getElementById('remote-sel').innerText = p; });
+        }
+
+        function renderExp(id, data, onNav, onSel) {
+            const el = document.getElementById(id);
+            el.innerHTML = '';
+            const up = document.createElement('div'); up.className = 'explorer-item'; up.innerText = '.. (Subir)';
+            up.onclick = () => { let p = data.current.split('/').filter(x=>x); p.pop(); onNav('/'+p.join('/')); };
+            el.appendChild(up);
+
+            const sel = document.createElement('div'); sel.className = 'explorer-item'; sel.innerHTML = '<b>✓ Seleccionar actual</b>';
+            sel.onclick = () => onSel(data.current);
+            el.appendChild(sel);
+
+            data.dirs.forEach(d => {
+                const item = document.createElement('div'); item.className = 'explorer-item'; item.innerText = '📁 ' + d;
+                item.onclick = () => onNav(data.current + (data.current.endsWith('/') ? '' : '/') + d);
+                el.appendChild(item);
+            });
+        }
+
+        async function activateBridge() {
+            document.getElementById('loading').style.display = 'flex';
+            const config = {
+                session_name: document.getElementById('session_name').value,
+                host: document.getElementById('host').value, user: document.getElementById('user').value,
+                password: document.getElementById('pass').value, local_path: selLocal, remote_path: selRemote
+            };
+            const r = await fetch('/api/config', { method: 'POST', body: JSON.stringify(config) });
+            document.getElementById('loading').style.display = 'none';
+            if(r.ok) { alert('Sincronización activada correctamente'); loadConfigs(); }
+        }
+
+        async function checkStatus() {
+            const r = await fetch('/api/sessions');
+            const data = await r.json();
+            const active = (data.output.match(/Watching for changes/g) || []).length;
+            document.getElementById('status-dot').className = active > 0 ? 'status-dot active' : 'status-dot';
+            document.getElementById('status-text').innerText = active > 0 ? `${active} Sesión(es) Activa(s)` : 'Bridge Inactivo';
+        }
+
+        function clearLogs() { document.getElementById('term-body').innerHTML = ''; }
+        function newSession() { document.querySelectorAll('input').forEach(i => i.value=''); selLocal=''; selRemote=''; document.getElementById('local-sel').innerText='No seleccionado'; document.getElementById('remote-sel').innerText='No seleccionado'; }
+
+        init();
+    </script>
+</body>
+</html>

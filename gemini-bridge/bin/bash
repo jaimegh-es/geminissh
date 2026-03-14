@@ -1,0 +1,26 @@
+#!/bin/bash
+# gemini-bridge/bin/bash
+# Este script intercepta las llamadas de Gemini CLI a bash -c.
+
+# Obtenemos la ruta absoluta de este directorio para evitar bucles
+REAL_BASH="/bin/bash"
+BRIDGE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+CONFIG_FILE="$BRIDGE_ROOT/.remote_config.json"
+
+# Obtenemos la ruta local configurada para saber si debemos interceptar
+LOCAL_PATH=""
+if [ -f "$CONFIG_FILE" ]; then
+    LOCAL_PATH=$(grep -o '"local_path": "[^"]*' "$CONFIG_FILE" | head -1 | cut -d'"' -f4)
+fi
+
+CURRENT_DIR=$(pwd)
+
+# Solo interceptamos si estamos dentro de la ruta local montada Y es una llamada -c
+if [[ "$1" == "-c" ]] && [[ ! -z "$LOCAL_PATH" ]] && [[ "$CURRENT_DIR" == "$LOCAL_PATH"* ]]; then
+    # Gemini llamó a bash -c "comando"
+    COMMAND="$2"
+    "$BRIDGE_ROOT/scripts/remote-exec.sh" "$COMMAND"
+else
+    # Caso fuera del montaje o llamada normal de bash
+    exec "$REAL_BASH" "$@"
+fi

@@ -1,0 +1,41 @@
+# Node & Dependencies
+node_modules/
+package-lock.json
+npm-debug.log*
+
+# Gemini Bridge (Secrets & Configs)
+# CRITICAL: Do not upload bridge configurations as they contain SSH host, user and passwords.
+gemini-bridge/.remote_config.json
+gemini-bridge/configs/
+gemini-bridge/server.log
+gemini-bridge/server.log.bak
+gemini-bridge/node_modules/
+remote_mount/
+
+# Environment & Secrets
+.env
+.env.local
+.env.*.local
+*.secret
+credentials.json
+
+# Logs & Debug
+*.log
+firebase-debug.log*
+firestore-debug.log*
+ui-debug.log*
+
+# System & IDEs
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*~
+
+# Temporary & Cache
+.gemini/
+.gemini-bridge/
+dist/
+build/
+temp/
