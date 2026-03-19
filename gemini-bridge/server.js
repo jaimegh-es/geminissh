@@ -10,8 +10,15 @@ const PORT = 3456;
 // Usamos una ruta global para las configuraciones
 const GLOBAL_DIR = path.join(os.homedir(), '.gemini-bridge');
 const CONFIGS_DIR = path.join(GLOBAL_DIR, 'configs');
+const SETTINGS_FILE = path.join(GLOBAL_DIR, 'settings.json');
 
 if (!fs.existsSync(CONFIGS_DIR)) fs.mkdirSync(CONFIGS_DIR, { recursive: true });
+
+// Cargar configuración inicial
+let globalSettings = { intercept_terminal: false };
+if (fs.existsSync(SETTINGS_FILE)) {
+    try { globalSettings = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')); } catch(e) {}
+}
 
 const logEmitter = new events.EventEmitter();
 
@@ -33,17 +40,43 @@ const server = http.createServer((req, res) => {
         return res.end();
     }
 
+    // API: Configuración Global
+    if (req.url === '/api/settings' && req.method === 'GET') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(globalSettings));
+        return;
+    }
+
+    if (req.url === '/api/settings' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', () => {
+            try {
+                const newSet = JSON.parse(body);
+                globalSettings = { ...globalSettings, ...newSet };
+                fs.writeFileSync(SETTINGS_FILE, JSON.stringify(globalSettings, null, 2));
+                logEmitter.emit('log', { type: 'system', message: `Ajuste global: ${JSON.stringify(globalSettings)}` });
+                res.writeHead(200); res.end(JSON.stringify({ status: 'success' }));
+            } catch(e) {
+                res.writeHead(400); res.end(JSON.stringify({ error: 'JSON inválido' }));
+            }
+        });
+        return;
+    }
+
     // API: Configuración y Sincronización
     if (req.url === '/api/config' && req.method === 'POST') {
         let body = '';
         req.on('data', chunk => { body += chunk; });
         req.on('end', () => {
             const config = JSON.parse(body);
-            const sessionName = config.session_name || 'gemini-bridge';
-            const configFile = path.join(CONFIGS_DIR, `${sessionName}.json`);
+            const originalSessionName = config.session_name || 'gemini-bridge';
+            // Mutagen doesn't allow spaces in session names
+            const validSessionName = originalSessionName.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-_]/g, '');
+            const configFile = path.join(CONFIGS_DIR, `${originalSessionName}.json`);
             
             fs.writeFileSync(configFile, JSON.stringify(config, null, 2));
-            logEmitter.emit('log', { type: 'system', message: `Configurando sesión: ${sessionName}` });
+            logEmitter.emit('log', { type: 'system', message: `Configurando sesión: ${originalSessionName} (ID: ${validSessionName})` });
 
             const pubKey = ensureSshKey();
             const conn = new Client();
@@ -59,16 +92,19 @@ const server = http.createServer((req, res) => {
                     }
                     stream.on('close', () => {
                         conn.end();
-                        exec(`mutagen sync terminate ${sessionName}`, () => {
-                            const mutagenCmd = `mutagen sync create --name=${sessionName} "${config.local_path}" "${config.user}@${config.host}:${config.remote_path}" --sync-mode=two-way-resolved`;
-                            exec(mutagenCmd, (err2) => {
-                                if (err2) {
-                                    logEmitter.emit('log', { type: 'error', message: 'Mutagen falló' });
-                                    res.writeHead(500); res.end(JSON.stringify({ status: 'error', message: err2.message }));
-                                } else {
-                                    logEmitter.emit('log', { type: 'system', message: 'Bridge activo!' });
-                                    res.writeHead(200); res.end(JSON.stringify({ status: 'success', message: 'Conectado' }));
-                                }
+                        // Agregar a known_hosts para que mutagen no falle por host verification
+                        exec(`ssh-keyscan -H ${config.host} >> ~/.ssh/known_hosts`, () => {
+                            exec(`mutagen sync terminate "${validSessionName}"`, () => {
+                                const mutagenCmd = `mutagen sync create --name="${validSessionName}" "${config.local_path}" "${config.user}@${config.host}:${config.remote_path}" --sync-mode=two-way-resolved`;
+                                exec(mutagenCmd, (err2, stdout, stderr) => {
+                                    if (err2) {
+                                        logEmitter.emit('log', { type: 'error', message: `Mutagen falló: ${stderr || err2.message}` });
+                                        res.writeHead(500); res.end(JSON.stringify({ status: 'error', message: stderr || err2.message }));
+                                    } else {
+                                        logEmitter.emit('log', { type: 'system', message: 'Bridge activo!' });
+                                        res.writeHead(200); res.end(JSON.stringify({ status: 'success', message: 'Conectado' }));
+                                    }
+                                });
                             });
                         });
                     }).resume();
@@ -128,6 +164,24 @@ const server = http.createServer((req, res) => {
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ status: 'error', message: err.message }));
             }).connect({ host: config.host, username: config.user, password: config.password, timeout: 5000 });
+        });
+        return;
+    }
+
+    // API: Borrar Sesión
+    if (req.url === '/api/delete-session' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', () => {
+            const { name } = JSON.parse(body);
+            const configFile = path.join(CONFIGS_DIR, `${name}.json`);
+            if (fs.existsSync(configFile)) {
+                fs.unlinkSync(configFile);
+                logEmitter.emit('log', { type: 'system', message: `Sesión eliminada: ${name}` });
+                res.writeHead(200); res.end(JSON.stringify({ status: 'success' }));
+            } else {
+                res.writeHead(404); res.end(JSON.stringify({ status: 'error', message: 'No existe la sesión' }));
+            }
         });
         return;
     }

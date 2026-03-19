@@ -1,181 +1,446 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gemini Remote Bridge</title>
+    <title>Gemini Remote Bridge | Pro</title>
+    <!-- Fonts & Icons -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
     <style>
         :root {
-            --bg: #000000;
-            --surface: #0a0a0a;
+            --bg: #050505;
+            --surface: #0f0f0f;
+            --surface-hover: #161616;
             --border: #1f1f1f;
-            --text: #ededed;
-            --text-muted: #888888;
+            --text: #ffffff;
+            --text-muted: #a1a1aa;
             --accent: #ffffff;
-            --accent-muted: #333333;
+            --accent-muted: #27272a;
             --green: #22c55e;
             --red: #ef4444;
-            --amber: #f59e0b;
-            --radius: 6px;
+            --blue: #3b82f6;
+            --radius: 8px;
+            --sidebar-width: 300px;
         }
 
-        * { box-sizing: border-box; }
-        body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); margin: 0; line-height: 1.5; -webkit-font-smoothing: antialiased; }
-        
-        .layout { display: grid; grid-template-columns: 320px 1fr; height: 100vh; overflow: hidden; }
-        
-        aside { background: var(--surface); border-right: 1px solid var(--border); padding: 24px; display: flex; flex-direction: column; gap: 32px; overflow-y: auto; }
-        main { padding: 40px; overflow-y: auto; display: flex; flex-direction: column; gap: 32px; max-width: 900px; margin: 0 auto; width: 100%; }
+        * { box-sizing: border-box; outline: none; }
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background: var(--bg); 
+            color: var(--text); 
+            margin: 0; 
+            display: flex; 
+            height: 100vh; 
+            overflow: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
 
-        .logo { font-size: 14px; font-weight: 700; letter-spacing: -0.5px; display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-        .logo svg { width: 18px; height: 18px; }
+        /* Sidebar */
+        aside { 
+            width: var(--sidebar-width); 
+            background: var(--surface); 
+            border-right: 1px solid var(--border); 
+            display: flex; 
+            flex-direction: column; 
+            padding: 24px;
+            flex-shrink: 0;
+        }
 
-        .section-label { font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.05em; margin-bottom: 12px; }
-        
-        .session-card { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; cursor: pointer; transition: 0.2s; position: relative; }
-        .session-card:hover { border-color: var(--accent); }
-        .session-card.active { border-color: var(--accent); background: #111; }
+        .logo { 
+            font-size: 16px; 
+            font-weight: 800; 
+            letter-spacing: -0.5px; 
+            display: flex; 
+            align-items: center; 
+            gap: 10px; 
+            margin-bottom: 32px;
+            color: var(--text);
+        }
+
+        .section-label { 
+            font-size: 11px; 
+            font-weight: 700; 
+            text-transform: uppercase; 
+            color: var(--text-muted); 
+            letter-spacing: 0.05em; 
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .session-list { display: flex; flex-direction: column; gap: 8px; overflow-y: auto; flex: 1; }
+        .session-card { 
+            background: var(--bg); 
+            border: 1px solid var(--border); 
+            border-radius: var(--radius); 
+            padding: 12px; 
+            cursor: pointer; 
+            transition: all 0.2s; 
+            position: relative;
+        }
+        .session-card:hover { border-color: var(--blue); background: var(--surface-hover); }
+        .session-card.active { border-color: var(--blue); background: #1d4ed81a; }
         .session-card .name { font-size: 13px; font-weight: 600; display: block; margin-bottom: 4px; }
         .session-card .host { font-size: 11px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; }
-        .btn-del { position: absolute; top: 8px; right: 8px; opacity: 0; background: none; border: none; color: var(--red); cursor: pointer; padding: 4px; }
+        .btn-del { 
+            position: absolute; top: 12px; right: 12px; opacity: 0; 
+            background: none; border: none; color: var(--red); 
+            cursor: pointer; padding: 4px; font-size: 12px; transition: 0.2s;
+        }
         .session-card:hover .btn-del { opacity: 1; }
 
-        .field { display: flex; flex-direction: column; gap: 8px; }
-        .field label { font-size: 12px; font-weight: 500; color: var(--text-muted); }
-        input { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); padding: 10px 12px; font-size: 13px; outline: none; transition: 0.2s; font-family: 'JetBrains Mono', monospace; }
-        input:focus { border-color: var(--accent); }
+        /* Main Content */
+        main { 
+            flex: 1; 
+            overflow-y: auto; 
+            padding: 40px; 
+            display: flex; 
+            flex-direction: column; 
+            gap: 32px; 
+            max-width: 1200px; 
+            margin: 0 auto; 
+            width: 100%;
+        }
 
-        button { padding: 10px 16px; border-radius: var(--radius); font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid var(--border); transition: 0.2s; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
-        button.primary { background: var(--accent); color: var(--bg); border: none; }
-        button.primary:hover { opacity: 0.9; }
-        button.secondary { background: var(--bg); color: var(--text); }
-        button.secondary:hover { background: var(--surface); border-color: var(--accent-muted); }
-
-        .explorer-container { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
-        .explorer-nav { padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--text-muted); display: flex; align-items: center; gap: 8px; }
-        .explorer-list { height: 180px; overflow-y: auto; padding: 8px; }
-        .explorer-item { padding: 6px 12px; font-size: 12px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 8px; }
-        .explorer-item:hover { background: var(--bg); }
-        .explorer-item.selected { background: #111; color: var(--green); font-weight: 600; }
-
-        .terminal { background: #050505; border: 1px solid var(--border); border-radius: var(--radius); font-family: 'JetBrains Mono', monospace; font-size: 11px; height: 280px; overflow: hidden; display: flex; flex-direction: column; }
-        .term-header { padding: 8px 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
-        .term-body { padding: 16px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 6px; }
-        .log-line { border-left: 2px solid var(--accent-muted); padding-left: 12px; margin-bottom: 4px; }
-        .log-type { font-weight: 700; font-size: 9px; margin-bottom: 2px; }
-        .log-content { white-space: pre-wrap; word-break: break-all; color: var(--text); }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1.2fr; gap: 40px; }
         
-        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #333; }
-        .status-dot.active { background: var(--green); box-shadow: 0 0 8px var(--green); }
+        .card { 
+            background: var(--surface); 
+            border: 1px solid var(--border); 
+            border-radius: var(--radius); 
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
 
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        .field { display: flex; flex-direction: column; gap: 8px; }
+        .field label { font-size: 12px; font-weight: 600; color: var(--text-muted); }
+        
+        .input-group { position: relative; }
+        .input-group i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 14px; }
+        
+        input { 
+            background: var(--bg); 
+            border: 1px solid var(--border); 
+            border-radius: var(--radius); 
+            color: var(--text); 
+            padding: 10px 12px; 
+            font-size: 13px; 
+            width: 100%; 
+            transition: 0.2s;
+            font-family: 'Inter', sans-serif;
+        }
+        .input-with-icon { padding-left: 36px; }
+        input:focus { border-color: var(--blue); box-shadow: 0 0 0 2px #3b82f633; }
+
+        button { 
+            padding: 12px 16px; 
+            border-radius: var(--radius); 
+            font-size: 13px; 
+            font-weight: 600; 
+            cursor: pointer; 
+            border: 1px solid var(--border); 
+            transition: 0.2s; 
+            display: inline-flex; 
+            align-items: center; 
+            justify-content: center; 
+            gap: 8px; 
+        }
+        button.primary { background: var(--text); color: var(--bg); border: none; }
+        button.primary:hover { opacity: 0.9; transform: translateY(-1px); }
+        button.secondary { background: var(--bg); color: var(--text); }
+        button.secondary:hover { background: var(--surface-hover); border-color: var(--text-muted); }
+        button.ghost { background: transparent; border: none; color: var(--text-muted); padding: 4px 8px; }
+        button.ghost:hover { color: var(--text); background: var(--accent-muted); }
+
+        /* Explorer */
+        .explorer-container { 
+            background: var(--bg); 
+            border: 1px solid var(--border); 
+            border-radius: var(--radius); 
+            overflow: hidden; 
+            display: flex;
+            flex-direction: column;
+            transition: height 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            height: 240px;
+        }
+        .explorer-container.expanded { height: 500px; }
+        
+        .explorer-header { 
+            padding: 8px 12px; 
+            background: var(--surface-hover); 
+            border-bottom: 1px solid var(--border); 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center;
+        }
+        .explorer-path { font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        
+        .explorer-search { padding: 8px; border-bottom: 1px solid var(--border); }
+        .explorer-search input { padding: 6px 10px; font-size: 12px; }
+
+        .explorer-list { flex: 1; overflow-y: auto; padding: 4px; }
+        .explorer-item { 
+            padding: 8px 12px; font-size: 12px; border-radius: 4px; 
+            cursor: pointer; display: flex; align-items: center; gap: 10px;
+            transition: 0.1s;
+        }
+        .explorer-item:hover { background: var(--surface-hover); }
+        .explorer-item i { color: var(--text-muted); font-size: 14px; }
+        .explorer-item.folder i { color: var(--blue); }
+        .explorer-item.up i { color: var(--text-muted); }
+        .explorer-item.selected { background: #3b82f61a; color: var(--blue); font-weight: 600; }
+
+        /* Terminal */
+        .terminal { 
+            background: #000; 
+            border: 1px solid var(--border); 
+            border-radius: var(--radius); 
+            font-family: 'JetBrains Mono', monospace; 
+            font-size: 12px; 
+            height: 350px; 
+            display: flex; 
+            flex-direction: column; 
+            margin-top: 20px;
+        }
+        .term-header { 
+            padding: 12px 20px; 
+            background: var(--surface);
+            border-bottom: 1px solid var(--border); 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+        }
+        .term-body { padding: 20px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 8px; }
+        .log-line { display: flex; gap: 12px; padding: 4px 0; border-bottom: 1px solid #111; }
+        .log-type { font-weight: 700; font-size: 10px; padding: 2px 6px; border-radius: 4px; height: fit-content; text-transform: uppercase; }
+        .log-type.exec { background: var(--accent-muted); color: var(--text); }
+        .log-type.out { background: #22c55e22; color: var(--green); }
+        .log-type.err { background: #ef444422; color: var(--red); }
+        .log-type.sys { background: #3b82f622; color: var(--blue); }
+        .log-content { white-space: pre-wrap; word-break: break-all; color: var(--text); flex: 1; line-height: 1.4; }
+
+        /* Settings Switch */
+        .switch { position: relative; display: inline-block; width: 36px; height: 20px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: var(--accent-muted); transition: .3s; border-radius: 34px; }
+        .slider:before { position: absolute; content: ""; height: 14px; width: 14px; left: 3px; bottom: 3px; background-color: white; transition: .3s; border-radius: 50%; }
+        input:checked + .slider { background-color: var(--green); }
+        input:checked + .slider:before { transform: translateX(16px); }
+
+        .status-badge { 
+            display: flex; align-items: center; gap: 8px; 
+            padding: 8px 12px; background: var(--bg); 
+            border: 1px solid var(--border); border-radius: var(--radius);
+        }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent-muted); }
+        .status-dot.active { background: var(--green); box-shadow: 0 0 10px var(--green); }
+
+        #loading {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 1000;
+            display: none; align-items: center; justify-content: center; flex-direction: column; gap: 20px;
+            backdrop-filter: blur(4px);
+        }
+        .spinner { width: 32px; height: 32px; border: 3px solid var(--accent-muted); border-top-color: var(--text); border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-thumb { background: var(--accent-muted); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #444; }
     </style>
 </head>
 <body>
-    <div id="loading" style="display:none; position:fixed; inset:0; background: rgba(0,0,0,0.8); z-index:100; align-items:center; justify-content:center; flex-direction:column; gap:16px;">
-        <div style="width:24px; height:24px; border:2px solid #333; border-top-color:#fff; border-radius:50%; animation:spin 0.8s linear infinite;"></div>
-        <div id="loading-txt" style="font-size:12px; font-family:monospace;">Sincronizando...</div>
+    <div id="loading">
+        <div class="spinner"></div>
+        <div id="loading-txt" style="font-size:14px; font-weight:500; letter-spacing: 0.05em;">SYNCING ASSETS...</div>
     </div>
 
-    <div class="layout">
-        <aside>
-            <div class="logo">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 7l5 5-5 5M13 7l5 5-5 5"/></svg>
-                REMOTE BRIDGE
+    <aside>
+        <div class="logo">
+            <i data-lucide="zap" style="color: var(--blue)"></i>
+            GEMINI BRIDGE
+        </div>
+
+        <section style="flex: 1; display: flex; flex-direction: column;">
+            <div class="section-label"><i class="fas fa-plug"></i> Saved Sessions</div>
+            <div id="session-list" class="session-list"></div>
+            <button onclick="newSession()" class="secondary" style="width:100%; margin-top:16px;">
+                <i data-lucide="plus"></i> New Connection
+            </button>
+        </section>
+
+        <section style="margin-top: 40px; display:flex; flex-direction:column; gap:20px;">
+            <div class="section-label"><i class="fas fa-cog"></i> Global Settings</div>
+            <div style="display:flex; align-items:center; justify-content:space-between; background:var(--bg); border:1px solid var(--border); padding:12px; border-radius:var(--radius);">
+                <span style="font-size:12px; font-weight:500;">Terminal Hook</span>
+                <label class="switch">
+                    <input type="checkbox" id="toggle-intercept" onchange="updateSettings()">
+                    <span class="slider"></span>
+                </label>
             </div>
 
-            <section>
-                <div class="section-label">Configuraciones</div>
-                <div id="session-list" style="display:flex; flex-direction:column; gap:12px;"></div>
-                <button onclick="newSession()" class="secondary" style="width:100%; margin-top:16px; font-size:11px;">+ Nueva Conexión</button>
-            </section>
+            <div class="section-label"><i class="fas fa-signal"></i> System Status</div>
+            <div class="status-badge">
+                <div id="status-dot" class="status-dot"></div>
+                <span id="status-text" style="font-size:12px; font-weight:600;">Offline</span>
+            </div>
+        </section>
+    </aside>
 
-            <section style="margin-top: auto;">
-                <div class="section-label">Estado Global</div>
-                <div style="display:flex; align-items:center; gap:12px; background:var(--bg); border:1px solid var(--border); padding:12px; border-radius:var(--radius);">
-                    <div id="status-dot" class="status-dot"></div>
-                    <span id="status-text" style="font-size:12px; font-weight:500;">Bridge Inactivo</span>
+    <main>
+        <div class="grid-2">
+            <!-- Left Column: Config -->
+            <div class="card">
+                <div class="section-label"><i class="fas fa-server"></i> Server Details</div>
+                
+                <div class="field">
+                    <label>Session Name</label>
+                    <input id="session_name" placeholder="e.g. Production-Server">
                 </div>
-            </section>
-        </aside>
-
-        <main>
-            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:32px;">
-                <div style="display:flex; flex-direction:column; gap:24px;">
-                    <div class="section-label">Servidor Remoto</div>
-                    <div class="field">
-                        <label>Nombre Sesión</label>
-                        <input id="session_name" placeholder="Ej: Production-Vercel">
+                
+                <div class="field">
+                    <label>Host / IP Address</label>
+                    <div class="input-group">
+                        <i class="fas fa-network-wired"></i>
+                        <input id="host" class="input-with-icon" placeholder="192.168.1.100">
                     </div>
-                    <div class="field">
-                        <label>Host / IP</label>
-                        <input id="host" placeholder="192.168.1.50">
-                    </div>
-                    <div class="field">
-                        <label>Usuario</label>
-                        <input id="user" placeholder="root">
-                    </div>
-                    <div class="field">
-                        <label>Contraseña</label>
-                        <input type="password" id="pass" placeholder="••••••••">
-                    </div>
-                    <button onclick="testSSH()" class="secondary" id="btn-test">Test Conexión</button>
                 </div>
 
-                <div style="display:flex; flex-direction:column; gap:24px;">
-                    <div class="section-label">Mapeo de Rutas</div>
-                    
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
                     <div class="field">
-                        <label>Directorio Local (Mac)</label>
-                        <div class="explorer-container">
-                            <div class="explorer-nav" id="local-nav">/Users/dev</div>
-                            <div id="local-list" class="explorer-list"></div>
+                        <label>SSH Username</label>
+                        <div class="input-group">
+                            <i class="fas fa-user"></i>
+                            <input id="user" class="input-with-icon" placeholder="root">
                         </div>
-                        <div id="local-sel" class="host" style="font-size:10px; margin-top:4px;">No seleccionado</div>
                     </div>
-
                     <div class="field">
-                        <label>Directorio Remoto (Linux)</label>
-                        <div class="explorer-container">
-                            <div class="explorer-nav" id="remote-nav">/</div>
-                            <div id="remote-list" class="explorer-list"></div>
+                        <label>Password</label>
+                        <div class="input-group">
+                            <i class="fas fa-key"></i>
+                            <input type="password" id="pass" class="input-with-icon" placeholder="••••••••">
                         </div>
-                        <div id="remote-sel" class="host" style="font-size:10px; margin-top:4px;">No seleccionado</div>
                     </div>
                 </div>
+
+                <button onclick="testSSH()" class="secondary" id="btn-test" style="margin-top: 10px;">
+                    <i class="fas fa-vial"></i> Test SSH Connection
+                </button>
             </div>
 
-            <div style="border-top: 1px solid var(--border); padding-top: 32px;">
-                <button onclick="activateBridge()" class="primary" style="width:100%; height:48px;">ACTIVAR SINCRONIZACIÓN</button>
-            </div>
-
-            <div class="terminal">
-                <div class="term-header">
-                    <span class="section-label" style="margin:0;">Intercepción de Comandos</span>
-                    <button onclick="clearLogs()" style="padding:2px 8px; font-size:9px; background:none; border-color:var(--accent-muted);">Limpiar</button>
+            <!-- Right Column: Explorers -->
+            <div class="card">
+                <div class="section-label"><i class="fas fa-folder-tree"></i> Path Mapping</div>
+                
+                <div class="field">
+                    <label>Local Directory (Host Mac)</label>
+                    <div id="local-container" class="explorer-container">
+                        <div class="explorer-header">
+                            <span class="explorer-path" id="local-nav">/Users/dev</span>
+                            <button class="ghost" onclick="toggleExpand('local-container')"><i data-lucide="maximize-2"></i></button>
+                        </div>
+                        <div class="explorer-search">
+                            <input type="text" id="local-search" placeholder="Search folders..." oninput="filterExplorer('local-list', this.value)">
+                        </div>
+                        <div id="local-list" class="explorer-list"></div>
+                    </div>
+                    <div id="local-sel" class="host" style="font-size:11px; margin-top:6px; color: var(--blue); font-family: monospace;">Not selected</div>
                 </div>
-                <div id="term-body" class="term-body"></div>
-            </div>
-        </main>
-    </div>
 
-    <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
+                <div class="field">
+                    <label>Remote Directory (Linux Client)</label>
+                    <div id="remote-container" class="explorer-container">
+                        <div class="explorer-header">
+                            <span class="explorer-path" id="remote-nav">/</span>
+                            <button class="ghost" onclick="toggleExpand('remote-container')"><i data-lucide="maximize-2"></i></button>
+                        </div>
+                        <div class="explorer-search">
+                            <input type="text" id="remote-search" placeholder="Search folders..." oninput="filterExplorer('remote-list', this.value)">
+                        </div>
+                        <div id="remote-list" class="explorer-list"></div>
+                    </div>
+                    <div id="remote-sel" class="host" style="font-size:11px; margin-top:6px; color: var(--blue); font-family: monospace;">Not selected</div>
+                </div>
+            </div>
+        </div>
+
+        <div style="display: flex; gap: 20px; align-items: center;">
+            <button onclick="activateBridge()" class="primary" style="flex: 1; height: 54px; font-size: 15px;">
+                <i class="fas fa-bolt"></i> START SYNCHRONIZATION
+            </button>
+        </div>
+
+        <!-- Terminal Section -->
+        <div class="terminal">
+            <div class="term-header">
+                <span class="section-label" style="margin:0;"><i class="fas fa-terminal"></i> Command Interception Stream</span>
+                <button class="ghost" onclick="clearLogs()"><i data-lucide="trash-2"></i> Clear</button>
+            </div>
+            <div id="term-body" class="term-body"></div>
+        </div>
+    </main>
 
     <script>
         let sessions = {};
         let selLocal = '';
         let selRemote = '';
+        let explorersData = { 'local-list': [], 'remote-list': [] };
 
         async function init() {
+            lucide.createIcons();
             await loadConfigs();
+            await loadSettings();
             setupSSE();
             setInterval(checkStatus, 5000);
             checkStatus();
             browseLocal('');
+        }
+
+        function toggleExpand(id) {
+            const el = document.getElementById(id);
+            el.classList.toggle('expanded');
+            const icon = el.querySelector('.ghost i');
+            if (el.classList.contains('expanded')) {
+                icon.setAttribute('data-lucide', 'minimize-2');
+            } else {
+                icon.setAttribute('data-lucide', 'maximize-2');
+            }
+            lucide.createIcons();
+        }
+
+        function filterExplorer(listId, query) {
+            const data = explorersData[listId];
+            if (!data) return;
+            const filtered = {
+                ...data,
+                dirs: data.dirs.filter(d => d.toLowerCase().includes(query.toLowerCase()))
+            };
+            renderExp(listId, filtered, 
+                listId === 'local-list' ? browseLocal : browseRemote, 
+                listId === 'local-list' ? (p) => { selLocal = p; document.getElementById('local-sel').innerText = p; } : (p) => { selRemote = p; document.getElementById('remote-sel').innerText = p; }
+            );
+        }
+
+        async function loadSettings() {
+            const r = await fetch('/api/settings');
+            const settings = await r.json();
+            document.getElementById('toggle-intercept').checked = settings.intercept_terminal;
+        }
+
+        async function updateSettings() {
+            const intercept_terminal = document.getElementById('toggle-intercept').checked;
+            await fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ intercept_terminal })
+            });
         }
 
         function setupSSE() {
@@ -186,15 +451,17 @@
                 const line = document.createElement('div');
                 line.className = 'log-line';
                 
-                let color = 'var(--text-muted)';
-                let type = 'INFO';
-                if(data.type === 'command') { color = 'var(--accent)'; type = 'EXEC'; }
-                if(data.type === 'result') { color = data.exit_code === 0 ? 'var(--green)' : 'var(--red)'; type = 'OUT'; }
-                if(data.type === 'error') { color = 'var(--red)'; type = 'ERR'; }
+                let typeClass = 'sys';
+                let typeLabel = 'INFO';
+                let content = data.output || data.cmd || data.message || '';
+
+                if(data.type === 'command') { typeClass = 'exec'; typeLabel = 'EXEC'; }
+                if(data.type === 'result') { typeClass = data.exit_code === 0 ? 'out' : 'err'; typeLabel = 'OUT'; }
+                if(data.type === 'error') { typeClass = 'err'; typeLabel = 'ERR'; }
 
                 line.innerHTML = `
-                    <div class="log-type" style="color:${color}">${type}</div>
-                    <div class="log-content">${(data.output || data.cmd || data.message || '').replace(/</g, '&lt;')}</div>
+                    <div class="log-type ${typeClass}">${typeLabel}</div>
+                    <div class="log-content">${content.replace(/</g, '&lt;')}</div>
                 `;
                 body.appendChild(line);
                 body.scrollTop = body.scrollHeight;
@@ -210,7 +477,11 @@
                 const s = sessions[name];
                 const div = document.createElement('div');
                 div.className = 'session-card';
-                div.innerHTML = `<span class="name">${name}</span><span class="host">${s.user}@${s.host}</span><button class="btn-del" onclick="deleteSession(event, '${name}')">✕</button>`;
+                div.innerHTML = `
+                    <span class="name">${name}</span>
+                    <span class="host">${s.user}@${s.host}</span>
+                    <button class="btn-del" onclick="deleteSession(event, '${name}')"><i class="fas fa-trash"></i></button>
+                `;
                 div.onclick = () => loadSession(name);
                 list.appendChild(div);
             });
@@ -227,20 +498,31 @@
             document.getElementById('local-sel').innerText = selLocal;
             document.getElementById('remote-sel').innerText = selRemote;
             browseLocal(selLocal);
+            browseRemote(selRemote);
+            
+            document.querySelectorAll('.session-card').forEach(c => c.classList.remove('active'));
+            event.currentTarget.classList.add('active');
         }
 
         async function browseLocal(path) {
             const r = await fetch('/api/ls-local', { method: 'POST', body: JSON.stringify({ path }) });
             const data = await r.json();
+            explorersData['local-list'] = data;
             document.getElementById('local-nav').innerText = data.current;
             renderExp('local-list', data, browseLocal, (p) => { selLocal = p; document.getElementById('local-sel').innerText = p; });
         }
 
         async function browseRemote(path = '/') {
-            const config = { host: document.getElementById('host').value, user: document.getElementById('user').value, password: document.getElementById('pass').value, remote_path: path };
+            const config = { 
+                host: document.getElementById('host').value, 
+                user: document.getElementById('user').value, 
+                password: document.getElementById('pass').value, 
+                remote_path: path 
+            };
             const r = await fetch('/api/ls-remote', { method: 'POST', body: JSON.stringify(config) });
             const data = await r.json();
-            if(data.error) return alert(data.error);
+            if(data.error) return;
+            explorersData['remote-list'] = data;
             document.getElementById('remote-nav').innerText = data.current;
             renderExp('remote-list', data, browseRemote, (p) => { selRemote = p; document.getElementById('remote-sel').innerText = p; });
         }
@@ -248,43 +530,126 @@
         function renderExp(id, data, onNav, onSel) {
             const el = document.getElementById(id);
             el.innerHTML = '';
-            const up = document.createElement('div'); up.className = 'explorer-item'; up.innerText = '.. (Subir)';
-            up.onclick = () => { let p = data.current.split('/').filter(x=>x); p.pop(); onNav('/'+p.join('/')); };
+            
+            // Back button
+            const up = document.createElement('div'); up.className = 'explorer-item up'; 
+            up.innerHTML = '<i class="fas fa-level-up-alt"></i> .. (Go Up)';
+            up.onclick = () => { 
+                let p = data.current.split('/').filter(x=>x); 
+                p.pop(); 
+                onNav('/'+p.join('/')); 
+            };
             el.appendChild(up);
 
-            const sel = document.createElement('div'); sel.className = 'explorer-item'; sel.innerHTML = '<b>✓ Seleccionar actual</b>';
-            sel.onclick = () => onSel(data.current);
+            // Select current
+            const sel = document.createElement('div'); sel.className = 'explorer-item'; 
+            sel.innerHTML = '<i class="fas fa-check-circle" style="color:var(--green)"></i> <b>Select current directory</b>';
+            sel.onclick = () => {
+                onSel(data.current);
+                document.querySelectorAll(`#${id} .explorer-item`).forEach(i => i.classList.remove('selected'));
+                sel.classList.add('selected');
+            };
             el.appendChild(sel);
 
             data.dirs.forEach(d => {
-                const item = document.createElement('div'); item.className = 'explorer-item'; item.innerText = '📁 ' + d;
+                const item = document.createElement('div'); item.className = 'explorer-item folder'; 
+                item.innerHTML = '<i class="fas fa-folder"></i> ' + d;
                 item.onclick = () => onNav(data.current + (data.current.endsWith('/') ? '' : '/') + d);
                 el.appendChild(item);
             });
         }
 
+        async function testSSH() {
+            const btn = document.getElementById('btn-test');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Testing...';
+            btn.disabled = true;
+
+            const config = {
+                host: document.getElementById('host').value,
+                user: document.getElementById('user').value,
+                password: document.getElementById('pass').value
+            };
+
+            try {
+                const r = await fetch('/api/test-ssh', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config)
+                });
+                const data = await r.json();
+                if (data.status === 'success') {
+                    alert('SSH Connection Successful!');
+                    browseRemote('/');
+                } else {
+                    alert('Connection Failed: ' + data.message);
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        }
+
         async function activateBridge() {
-            document.getElementById('loading').style.display = 'flex';
+            const loading = document.getElementById('loading');
+            loading.style.display = 'flex';
             const config = {
                 session_name: document.getElementById('session_name').value,
-                host: document.getElementById('host').value, user: document.getElementById('user').value,
-                password: document.getElementById('pass').value, local_path: selLocal, remote_path: selRemote
+                host: document.getElementById('host').value, 
+                user: document.getElementById('user').value,
+                password: document.getElementById('pass').value, 
+                local_path: selLocal, 
+                remote_path: selRemote
             };
-            const r = await fetch('/api/config', { method: 'POST', body: JSON.stringify(config) });
-            document.getElementById('loading').style.display = 'none';
-            if(r.ok) { alert('Sincronización activada correctamente'); loadConfigs(); }
+            try {
+                const r = await fetch('/api/config', { method: 'POST', body: JSON.stringify(config) });
+                loading.style.display = 'none';
+                if(r.ok) { 
+                    alert('Bridge Activated Successfully!'); 
+                    loadConfigs(); 
+                } else {
+                    const data = await r.json();
+                    alert('Activation Failed: ' + data.message);
+                }
+            } catch(e) {
+                loading.style.display = 'none';
+                alert('Error: ' + e.message);
+            }
+        }
+
+        async function deleteSession(event, name) {
+            event.stopPropagation();
+            if (!confirm(`Delete session "${name}"?`)) return;
+            try {
+                const r = await fetch('/api/delete-session', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name })
+                });
+                if (r.ok) loadConfigs();
+            } catch (e) { alert('Error deleting session'); }
         }
 
         async function checkStatus() {
             const r = await fetch('/api/sessions');
             const data = await r.json();
             const active = (data.output.match(/Watching for changes/g) || []).length;
-            document.getElementById('status-dot').className = active > 0 ? 'status-dot active' : 'status-dot';
-            document.getElementById('status-text').innerText = active > 0 ? `${active} Sesión(es) Activa(s)` : 'Bridge Inactivo';
+            const dot = document.getElementById('status-dot');
+            const txt = document.getElementById('status-text');
+            dot.className = active > 0 ? 'status-dot active' : 'status-dot';
+            txt.innerText = active > 0 ? `${active} Active Session(s)` : 'Bridge Idle';
         }
 
         function clearLogs() { document.getElementById('term-body').innerHTML = ''; }
-        function newSession() { document.querySelectorAll('input').forEach(i => i.value=''); selLocal=''; selRemote=''; document.getElementById('local-sel').innerText='No seleccionado'; document.getElementById('remote-sel').innerText='No seleccionado'; }
+        function newSession() { 
+            document.querySelectorAll('input:not([type=checkbox])').forEach(i => i.value=''); 
+            selLocal=''; selRemote=''; 
+            document.getElementById('local-sel').innerText='Not selected'; 
+            document.getElementById('remote-sel').innerText='Not selected';
+            document.querySelectorAll('.session-card').forEach(c => c.classList.remove('active'));
+        }
 
         init();
     </script>
