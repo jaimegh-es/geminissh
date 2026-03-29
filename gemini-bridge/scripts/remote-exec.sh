@@ -1,58 +1,61 @@
 #!/bin/bash
 # remote-exec.sh
-# Improved version: Handles JSON extraction and remote command execution robustly.
+# Improved version: Uses environment variables from activate.sh when available.
 
-CONFIGS_DIR="$HOME/.gemini-bridge/configs"
-CURRENT_DIR=$(pwd)
+# 1. Obtener configuración (Priorizar entorno, fallback a búsqueda manual)
+HOST="${GEMINI_BRIDGE_HOST}"
+USER="${GEMINI_BRIDGE_USER}"
+LOCAL_ROOT="${GEMINI_BRIDGE_PROJECT_ROOT}"
 
-# Find matching configuration based on current path
-MATCHED_CONFIG=""
-for f in "$CONFIGS_DIR"/*.json; do
-    [ -e "$f" ] || continue
-    # Extract local_path using a more robust pattern
-    LOCAL_PATH=$(grep '"local_path":' "$f" | sed -E 's/.*"local_path": "(.*)".*/\1/')
-    if [[ "$CURRENT_DIR" == "$LOCAL_PATH"* ]]; then
-        MATCHED_CONFIG="$f"
-        break
-    fi
-done
-
-if [ -z "$MATCHED_CONFIG" ]; then
-    # No match found, execute locally
-    eval "$@"
-    exit $?
+if [[ -z "$HOST" || -z "$LOCAL_ROOT" ]]; then
+    # Fallback: Buscar en configs si no hay variables de entorno
+    CONFIGS_DIR="$HOME/.gemini-bridge/configs"
+    CURRENT_DIR=$(pwd)
+    for f in "$CONFIGS_DIR"/*.json; do
+        [ -e "$f" ] || continue
+        LP=$(grep '"local_path":' "$f" | sed -E 's/.*"local_path": "(.*)".*/\1/')
+        if [[ "$CURRENT_DIR" == "$LP"* ]]; then
+            HOST=$(grep '"host":' "$f" | sed -E 's/.*"host": "(.*)".*/\1/')
+            USER=$(grep '"user":' "$f" | sed -E 's/.*"user": "(.*)".*/\1/')
+            REMOTE_ROOT=$(grep '"remote_path":' "$f" | sed -E 's/.*"remote_path": "(.*)".*/\1/')
+            LOCAL_ROOT="$LP"
+            break
+        fi
+    done
 fi
 
-# Extract session data
-HOST=$(grep '"host":' "$MATCHED_CONFIG" | sed -E 's/.*"host": "(.*)".*/\1/')
-USER=$(grep '"user":' "$MATCHED_CONFIG" | sed -E 's/.*"user": "(.*)".*/\1/')
-REMOTE_ROOT=$(grep '"remote_path":' "$MATCHED_CONFIG" | sed -E 's/.*"remote_path": "(.*)".*/\1/')
-LOCAL_ROOT=$(grep '"local_path":' "$MATCHED_CONFIG" | sed -E 's/.*"local_path": "(.*)".*/\1/')
+# Intentar obtener REMOTE_ROOT si no lo tenemos (fallback a /)
+if [ -z "$REMOTE_ROOT" ]; then
+    REMOTE_ROOT="/"
+fi
 
-# Safety check: If any vital info is missing, fallback to local
+# 2. Safety check: If vital info is missing, execute locally
 if [[ -z "$HOST" || -z "$USER" ]]; then
     eval "$@"
     exit $?
 fi
 
-# Calculate relative remote path
+# 3. Mapeo de rutas
+CURRENT_DIR=$(pwd)
 RELATIVE_PATH="${CURRENT_DIR#$LOCAL_ROOT}"
+# Asegurar que no hay barras dobles al principio
 FINAL_REMOTE_PATH="${REMOTE_ROOT}${RELATIVE_PATH}"
+FINAL_REMOTE_PATH=$(echo "$FINAL_REMOTE_PATH" | sed 's#//#/#g')
 
-# Combine all arguments into the final command
+# 4. Comando final
 COMMAND="$*"
 
-# Log the intent to the bridge server
+# 5. Log al servidor local del bridge
 curl -s -X POST -H "Content-Type: application/json" \
     -d "{\"type\":\"command\",\"cmd\":\"$COMMAND\",\"path\":\"$FINAL_REMOTE_PATH\"}" \
     http://localhost:3456/api/log > /dev/null
 
-# Execute via SSH with proper quoting for the remote shell
-# We use mkdir -p to ensure the directory exists on the remote before CDing
-OUTPUT=$(ssh -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=no "$USER@$HOST" "mkdir -p \"$FINAL_REMOTE_PATH\" && cd \"$FINAL_REMOTE_PATH\" && $COMMAND" 2>&1)
+# 6. Ejecución remota vía SSH
+# Usamos una sola conexión para asegurar el CD y el comando
+OUTPUT=$(ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=no "$USER@$HOST" "mkdir -p \"$FINAL_REMOTE_PATH\" && cd \"$FINAL_REMOTE_PATH\" && $COMMAND" 2>&1)
 EXIT_CODE=$?
 
-# Log the result back to the UI
+# 7. Log del resultado
 node -e "
 const http = require('http');
 const data = JSON.stringify({
