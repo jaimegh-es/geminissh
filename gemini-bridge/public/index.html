@@ -156,6 +156,8 @@
         button.primary:hover { opacity: 0.9; transform: translateY(-1px); }
         button.secondary { background: var(--bg); color: var(--text); }
         button.secondary:hover { background: var(--surface-hover); border-color: var(--text-muted); }
+        button.danger { background: #450a0a; color: #fca5a5; border-color: #7f1d1d; }
+        button.danger:hover { background: #7f1d1d; color: white; }
         button.ghost { background: transparent; border: none; color: var(--text-muted); padding: 4px 8px; }
         button.ghost:hover { color: var(--text); background: var(--accent-muted); }
 
@@ -212,6 +214,14 @@
         .status-dot.syncing { background: var(--blue); box-shadow: 0 0 10px var(--blue); animation: pulse 1.5s infinite; }
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
 
+        /* Switch */
+        .switch { position: relative; display: inline-block; width: 34px; height: 18px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: var(--accent-muted); transition: .3s; border-radius: 34px; }
+        .slider:before { position: absolute; content: ""; height: 12px; width: 12px; left: 3px; bottom: 3px; background-color: white; transition: .3s; border-radius: 50%; }
+        input:checked + .slider { background-color: var(--green); }
+        input:checked + .slider:before { transform: translateX(16px); }
+
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-thumb { background: var(--accent-muted); border-radius: 10px; }
     </style>
@@ -238,9 +248,9 @@
             <div style="display:flex; flex-direction:column; gap:10px; background:var(--bg); border:1px solid var(--border); padding:12px; border-radius:var(--radius);">
                 <div style="display:flex; align-items:center; justify-content:space-between;">
                     <span style="font-size:11px; font-weight:500;">Terminal Hook</span>
-                    <label class="switch" style="position: relative; display: inline-block; width: 34px; height: 18px;">
-                        <input type="checkbox" id="toggle-intercept" onchange="updateSettings()" style="opacity: 0; width: 0; height: 0;">
-                        <span style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: var(--accent-muted); transition: .3s; border-radius: 34px;" id="slider-bg"></span>
+                    <label class="switch">
+                        <input type="checkbox" id="toggle-intercept" onchange="updateSettings()">
+                        <span class="slider"></span>
                     </label>
                 </div>
                 <div style="display:flex; flex-direction:column; gap:6px; margin-top:8px;">
@@ -302,7 +312,10 @@
             </div>
         </div>
 
-        <button onclick="activateBridge()" class="primary" style="height: 54px; font-size: 15px; background: var(--blue); color: white;"><i class="fas fa-link"></i> ESTABLISH AGENT TUNNEL</button>
+        <div style="display: flex; gap: 16px;">
+            <button onclick="activateBridge()" class="primary" style="flex: 1; height: 54px; font-size: 15px; background: var(--blue); color: white;"><i class="fas fa-link"></i> ESTABLISH TUNNEL</button>
+            <button onclick="stopBridge()" class="danger" style="height: 54px; font-size: 15px; padding: 0 24px;"><i class="fas fa-stop-circle"></i> STOP</button>
+        </div>
 
         <div class="terminal">
             <div class="term-header"><span class="section-label" style="margin:0; color:var(--text);"><i class="fas fa-stream"></i> Tunnel Traffic</span><button class="ghost" onclick="clearLogs()"><i data-lucide="eraser"></i></button></div>
@@ -328,20 +341,12 @@
             const settings = await r.json();
             document.getElementById('toggle-intercept').checked = settings.intercept_terminal;
             document.getElementById('instruction_filename').value = settings.instruction_filename || 'GEMINI.md';
-            updateSliderUI();
         }
 
         async function updateSettings() {
             const intercept_terminal = document.getElementById('toggle-intercept').checked;
             const instruction_filename = document.getElementById('instruction_filename').value || 'GEMINI.md';
             await fetch('/api/settings', { method: 'POST', body: JSON.stringify({ intercept_terminal, instruction_filename }) });
-            updateSliderUI();
-        }
-
-        function updateSliderUI() {
-            const chk = document.getElementById('toggle-intercept');
-            const slider = document.getElementById('slider-bg');
-            slider.style.backgroundColor = chk.checked ? 'var(--green)' : 'var(--accent-muted)';
         }
 
         function setupSSE() {
@@ -433,12 +438,10 @@
             up.innerHTML = '<i class="fas fa-chevron-up"></i> .. [Go Up]';
             up.onclick = () => { let p = data.current.split('/').filter(x=>x); p.pop(); onNav('/'+p.join('/')); };
             el.appendChild(up);
-            
             const selCurrent = document.createElement('div'); selCurrent.className = 'explorer-item selected';
-            selCurrent.innerHTML = '<i class="fas fa-crosshairs"></i> [Select This Folder]';
+            selCurrent.innerHTML = '<i class="fas fa-crosshairs"></i> [Select Folder]';
             selCurrent.onclick = () => { onSel(data.current); };
             el.appendChild(selCurrent);
-
             data.dirs.forEach(d => {
                 const item = document.createElement('div'); item.className = 'explorer-item folder'; 
                 item.innerHTML = '<i class="fas fa-folder"></i> ' + d;
@@ -461,18 +464,18 @@
                 const isActive = out.includes("Name:");
 
                 if (isWatching) {
-                    dot.className = 'status-dot active'; txt.innerText = 'Tunnel Stable'; progBox.style.display = 'none';
+                    dot.className = 'status-dot active'; txt.innerText = 'Stable Connection'; progBox.style.display = 'none';
                 } else if (isStaging) {
-                    dot.className = 'status-dot syncing'; txt.innerText = 'Syncing Assets...'; progBox.style.display = 'block';
+                    dot.className = 'status-dot syncing'; txt.innerText = 'Synchronizing...'; progBox.style.display = 'block';
                     const matchPercent = out.match(/(\d+)%/), matchEntries = out.match(/(\d+\/\d+ entries)/) || out.match(/(\d+ entries)/), statusMsg = out.match(/Status: ([^\n\(]+)/);
                     if (matchPercent) { document.getElementById('sync-percent').innerText = matchPercent[0]; document.getElementById('sync-bar').style.width = matchPercent[0]; }
                     else { document.getElementById('sync-percent').innerText = '...'; document.getElementById('sync-bar').style.width = '100%'; }
                     if (statusMsg) document.getElementById('sync-status-msg').innerText = statusMsg[1].trim();
                     if (matchEntries) document.getElementById('sync-details').innerText = matchEntries[0];
                 } else if (isActive) {
-                    dot.className = 'status-dot syncing'; txt.innerText = 'Waking Tunnel...'; progBox.style.display = 'block';
+                    dot.className = 'status-dot syncing'; txt.innerText = 'Establishing...'; progBox.style.display = 'block';
                 } else {
-                    dot.className = 'status-dot'; txt.innerText = 'Idle'; progBox.style.display = 'none';
+                    dot.className = 'status-dot'; txt.innerText = 'Offline'; progBox.style.display = 'none';
                 }
             } catch(e) {}
         }
@@ -486,10 +489,23 @@
                 document.getElementById('loading').style.display = 'none';
                 const data = await r.json();
                 if (data.status === 'warning') { alert(data.message); window.open('/help.html', '_blank'); }
-                else if (r.ok) { alert('Agent Tunnel Online!'); }
+                else if (r.ok) { alert('Tunnel Online!'); }
                 else { alert('Tunnel Failure: ' + data.message); window.open('/help.html', '_blank'); }
                 loadConfigs();
             } catch(e) { document.getElementById('loading').style.display = 'none'; alert('Error: ' + e.message); window.open('/help.html', '_blank'); }
+        }
+
+        async function stopBridge() {
+            const name = document.getElementById('session_name').value;
+            if (!name) { alert('Select a session to stop.'); return; }
+            if (!confirm(`Stop tunnel for "${name}"?`)) return;
+            try {
+                const r = await fetch('/api/stop-session', { method: 'POST', body: JSON.stringify({ name }) });
+                const data = await r.json();
+                if (r.ok) alert('Tunnel Stopped.');
+                else alert('Error: ' + data.message);
+                checkStatus();
+            } catch(e) { alert('Error: ' + e.message); }
         }
 
         async function testSSH() {
